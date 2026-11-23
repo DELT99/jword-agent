@@ -5,9 +5,11 @@ description: Job-hunting and hiring-signal outreach assistant. Finds open jobs (
 
 # Jword: job hunting and hiring-signal outreach
 
-You (Claude) search, read, judge and write. `scripts/jword.py` handles everything deterministic: the posting-date window, filters, duplicates, contact checks, email checks, the send policy, statuses and the Excel file. **Run the command the script asks for next. Never redo its logic by hand or work around a refusal.** `SKILL_DIR` is the folder containing this file. It needs Python 3 and `openpyxl` (`pip install openpyxl` if the import fails).
+You (Claude) search, read, judge and write. `scripts/jword.py` handles everything deterministic: the posting-date window, filters, duplicates, contact checks, email checks, the send policy, statuses and the Excel file. **Run the command the script asks for next. Never redo its logic by hand or work around a refusal.** `SKILL_DIR` is the folder containing this file. It needs Python 3 and `openpyxl` (`pip install openpyxl` if the import fails). On Windows, use `python` or `py` where these steps say `python3`.
 
 **Execution:** if you can launch the subagents `job-researcher`, `contact-researcher`, `application-writer` and `outreach-writer` (Claude Code with this repo's `.claude/agents/`), use `references/orchestration.md`. **Otherwise (Claude chat, Cowork, any other app), do every step yourself, in order.** The results are the same.
+
+**Direct feeds (automatic):** where this machine can reach the internet directly (Claude Code on the user's computer, usually), `next` first reads company job-board feeds (Greenhouse, Lever, Ashby, Workable, SmartRecruiters) and remote-job APIs (Remotive, RemoteOK, Himalayas, Jobicy) with exact posting dates, then continues with web search. In Claude chat that network is normally blocked; the script notices in under a second and uses web search only. When a `next` result contains `direct_feeds`, tell the user its numbers in one line (*"Read 1,240 listings from 48 company boards and 4 job sites directly; 31 fit your window"*) and carry on. Nothing to install, nothing to ask.
 
 ## Step 1: ALWAYS ask first (never skip this, never start searching before the answers)
 
@@ -23,6 +25,7 @@ In the **same message**, ask in plain text for anything not already given, and r
 - **How many** jobs: default 10, maximum 25.
 - *Find jobs for you, or companies hiring (sales leads for an agency)?* Ask only if it isn't obvious. A CV means jobs mode.
 - Say once: *"Jobs that show no posting date are skipped, unless you'd like them in a separate list."*
+- **Claude Code only** (you can run shell commands on the user's computer): if they picked *LinkedIn* or *Anywhere*, ask one yes/no: *"Also read LinkedIn's public job listings directly? That finds many more LinkedIn jobs with exact dates, but LinkedIn's terms don't allow automated access: fine for a small personal search, and LinkedIn may block it for a while if overused."* If yes, add `--linkedin-direct` to `init`.
 
 Wait for the answers. A custom range can be free text ("last 10 days", "Nov 1 to Nov 10", "this week"). If the user attached an earlier Jword tracker, add `--existing <file> --recheck-previous`.
 
@@ -56,7 +59,7 @@ Run `jword.py plan` and show the numbered list (company, job, posted, fit, apply
 
 **A. The job post and listing.** Look for emails in the posting itself and the board page (addresses in snippets are captured automatically).
 
-**B. The company's own website: mandatory whenever A gave no HR/recruiter/careers email.** Search the **company name** and run the `contact_queries` that `plan` lists for that job (`"<Company>" official website`, `"<Company>" careers email`, `"<Company>" HR email <city>`, `"<Company>" recruiter OR "talent acquisition"`). Once you know the domain, search `<domain> careers`, `<domain> contact` and `"@<domain>"`, then **fetch the result pages** (careers, contact, about, team), because a URL you type yourself is usually refused. Collect named recruiters, HR, talent and hiring managers, founders, and careers@, jobs@, hr@, recruitment@, talent@ and info@ addresses.
+**B. The company's own website: mandatory whenever A gave no HR/recruiter/careers email.** First find the company's own site (search `"<Company>" official website` if you don't know it), then try `jword.py site-emails --id <id> --url <company website>`: it opens the home, careers, jobs, contact, about and team pages directly, decodes Cloudflare-hidden addresses, and records every email with its page and quoted text. If it answers `unavailable` (normal in Claude chat), or finds nothing, do it by hand: Search the **company name** and run the `contact_queries` that `plan` lists for that job (`"<Company>" official website`, `"<Company>" careers email`, `"<Company>" HR email <city>`, `"<Company>" recruiter OR "talent acquisition"`). Once you know the domain, search `<domain> careers`, `<domain> contact` and `"@<domain>"`, then **fetch the result pages** (careers, contact, about, team), because a URL you type yourself is usually refused. Collect named recruiters, HR, talent and hiring managers, founders, and careers@, jobs@, hr@, recruitment@, talent@ and info@ addresses.
 
 Record each company with `contacts --updates <file>`: `{"id","website","emails":[{"email","name","role","source_url","evidence"}],"people":[…]}`. Each email needs `source_url` + `evidence` (the quoted text containing it). Add `"website"` (or `"no_website": true`) once step B is done. **If `contacts` lists a lead under `incomplete`, step B isn't done yet: do it and send that lead again.** The script refuses guessed addresses and marks third-party sources *Unverified*. Say honestly when a company publishes no email.
 
@@ -74,7 +77,7 @@ Record the choice: `jword.py settings --email-mode drafts` (modes: `chat`, `draf
 
 ## Step 6: Deliver
 ```bash
-python3 SKILL_DIR/scripts/jword.py export --out <outputs>/jword_<YYYY-MM-DD>.xlsx
+python3 SKILL_DIR/scripts/jword.py export --out <outputs>/jword_<YYYY-MM-DD>.xlsx   # Claude Code: the project folder
 python3 SKILL_DIR/scripts/jword.py report
 ```
 Send the file and paste the `report` table. Then add 2–3 lines: totals (jobs, contacts, letters, drafts, sent), what was excluded and why (outside the window, no date, closed, paywalled…), and the user's next steps.

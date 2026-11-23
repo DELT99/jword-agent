@@ -10,6 +10,9 @@
 1. **Job post + listing**: often enough for agencies and small companies that print "send your CV to …".
 2. **Company website**: **required whenever stage 1 found no verified recruiter, HR or careers/jobs/hr address** (an info@ alone isn't enough). Search the company by name, find its own domain, and check its careers, contact, about and team pages. `plan` gives ready `contact_queries` for each job. `contacts` keeps a lead under `incomplete` until you send it again with `website` (or `no_website: true`).
 
+## Fast path: `site-emails` (when this machine can open websites)
+Once you know the company's own website, run `jword.py site-emails --id <id> --url <website>`. It reads the home page plus the careers, jobs, contact, about and team pages, decodes Cloudflare-hidden addresses, and records each email with its page and the quoted text around it, through the same checks as `contacts`. If it says `unavailable` (normal in Claude chat), or finds no hiring address, use the manual steps below.
+
 ## Where to look (about 4–6 fetches per company)
 **Open pages through search results.** Claude's web fetch usually refuses URLs that didn't come from a search result or the user. So don't type `acme.com/careers` straight into a fetch: search first (`acme.com careers`, `acme.com contact`, `"Acme" careers email`), then fetch the result links. Search snippets often show the address already.
 

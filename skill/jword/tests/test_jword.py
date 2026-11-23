@@ -6,6 +6,8 @@ import contextlib
 import datetime as dt
 import io
 import json
+import os
+os.environ.setdefault("JWORD_FEEDS", "off")   # these tests cover the web-search path; see test_direct.py
 import sys
 import tempfile
 from pathlib import Path

@@ -8,6 +8,7 @@ Jword, a job-hunting and hiring-signal outreach assistant. The same skill runs i
 - `.claude/skills/jword/` and `dist/jword.zip` are **generated** copies. Never edit them by hand. After any change under `skill/jword/`, run:
   `python3 tools/build_skill.py`
 - `.claude/agents/`: the `job-researcher`, `contact-researcher`, `application-writer` and `outreach-writer` subagents (Claude Code only).
+- `skill/jword/scripts/direct.py`: standard-library direct feeds (ATS job boards, remote-job APIs, opt-in LinkedIn guest search) and the company-site email reader (`site-emails`). `next` runs the feeds automatically where the network allows (Claude Code); in Claude chat they report `unavailable` and the web-search path runs.
 - `workflow/`, `src/nodes/`, `scripts/build_workflow.py`, `tests/simulate.js`: the original n8n workflow. Keep it working, and don't mix it with the skill.
 
 ## Using Jword here
@@ -17,11 +18,13 @@ Type `/jword` or ask "use jword to find …". Follow `SKILL.md`. With subagents 
 ```
 python3 skill/jword/tests/test_jword.py
 python3 skill/jword/tests/test_jword_v3.py
+python3 skill/jword/tests/test_direct.py
 python3 tests/test_distribution.py
 node tests/simulate.js
 ```
 
 ## Rules for changes
 - Keep the strict posting-date window, contact verification, outreach checks and send policy inside `jword.py`, and cover each with a test.
+- Keep everything installable-free: standard library + `openpyxl` only. Never add a source that needs an API key or a login. LinkedIn direct reading stays opt-in (`--linkedin-direct`).
 - Never commit CVs, profiles, run state, `.env` files or API keys.
 - Keep the README beginner-first (Claude chat install before Claude Code).

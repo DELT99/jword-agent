@@ -19,11 +19,12 @@ You are the **orchestrator**. You alone talk to the user, own the run state, and
 | `outreach-writer` | profile path + verified contacts + jobs | `outreach` updates file | sends or drafts in Gmail |
 
 ### Dependency-aware flow
-1. **Inputs** (you) → `init`.
+1. **Inputs** (you) → `init` (add `--linkedin-direct` if the user said yes to LinkedIn's direct listings).
+   Your first `next` reads the **direct feeds** on this computer (company job boards, job APIs, opt-in LinkedIn). That's usually dozens of dated jobs before any web search. Review those yourself, or split them among `job-researcher`s like any other batch.
 2. **Search, in parallel:** `jword.py shards --workers 3 --per-worker 3`. Launch one `job-researcher` per packet **in the same message**. When all have returned, `ingest --results <packet file>` for each, then `log --agents "job-researcher x3"`.
 3. **Review and verify:** `next --batch 12` (review it yourself, since fit judgement stays with the orchestrator), then `next --max-tasks 15`. Split the verify tasks among up to 3 `job-researcher` agents and merge their replies into one file. Where a reply has a `fit_note`, judge it yourself and add a new `fit_score` (drop `fit_note`). Then `apply`. Repeat steps 2–3 until `next` says `done`.
 4. **Ask the user** (Step 3 of SKILL.md) → `settings`.
-5. **Contacts, in parallel:** split `plan` → `todo.contacts` into groups of 2–4 and give one group to each `contact-researcher` (max 4 at once). Run `contacts --updates` for each file.
+5. **Contacts:** first, for each lead whose company website you know, run `site-emails --id <id> --url <site>` yourself (direct and fast, no agent needed). Then split the leads still `incomplete` (or with no website) into groups of 2–4, and give one group to each `contact-researcher` (max 4 at once). Run `contacts --updates` for each file.
 6. **Writing, in parallel** (needs steps 4–5): `application-writer` and `outreach-writer` per group of jobs. Record with `track` and `outreach`. Refusals go back to the same writer to fix.
 7. **External actions (you only):** `outbox` → Gmail drafts or sends → `gmail` after each call. Forms in the browser per `references/applying.md`.
 8. `export`, then `report`.

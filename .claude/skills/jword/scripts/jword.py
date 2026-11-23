@@ -34,10 +34,14 @@ import difflib
 import datetime as dt
 import json
 import math
+import os
 import re
 import sys
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import direct  # noqa: E402  (standard-library job feeds + company-site email reader)
 
 # ============================================================================ configuration
 
@@ -374,6 +378,10 @@ _CAPTURE = None
 
 
 def out(obj):
+    global _FEEDS_NOTE
+    if _FEEDS_NOTE and isinstance(obj, dict) and "action" in obj:
+        obj = {**obj, "direct_feeds": _FEEDS_NOTE}         # tell Claude once what the direct feeds added
+        _FEEDS_NOTE = None
     if _CAPTURE is not None:
         _CAPTURE.append(obj)
         return
@@ -1062,6 +1070,8 @@ def qualify_or_reject(st, c, score, reason, angle=""):
 def route(st, c):
     """Qualified lead: page check -> contact lookup -> save."""
     cfg = st["config"]
+    if c.get("feed") in FEED_IS_LIVE and c.get("open_check") is None:
+        c["open_check"] = f"Open (listed in the company's live {c['feed']} job feed)"
     if cfg["verify_open"] and c.get("open_check") is None and "linkedin.com" not in c["url"]:
         c["status"] = "needs_open_check"
         return
@@ -1139,6 +1149,116 @@ def promote(st, final=False):
         route(st, c)
 
 
+# ============================================================================ direct feeds
+FEED_IS_LIVE = ("Greenhouse", "Lever", "Ashby", "Workable", "SmartRecruiters")   # a job in these feeds is open
+_FEEDS_NOTE = None
+
+
+def register_board(st, url: str):
+    """Remember company job boards seen in results, so the direct feeds can read the whole board."""
+    ref = direct.ats_ref(url)
+    if ref:
+        key = f"{ref[0]}:{ref[1]}"
+        boards = st.setdefault("ats_boards", [])
+        if key not in boards:
+            boards.append(key)
+
+
+def maybe_run_feeds(st) -> dict | None:
+    """Once at the start (and again after 8+ new boards were discovered): read company job-board feeds and
+    remote-job APIs directly. Where the network is blocked (often in Claude chat), this is skipped in
+    about a second and the run continues with web search only."""
+    global _FEEDS_NOTE
+    cfg = st["config"]
+    if cfg.get("feeds", "auto") == "off" or os.environ.get("JWORD_FEEDS") == "off":
+        return None
+    fs = st.setdefault("feeds", {"state": None, "boards_done": []})
+    if fs["state"] == "unavailable":
+        return None
+    st.setdefault("ats_boards", [])
+    new_boards = [b for b in st["ats_boards"] if b not in fs["boards_done"]]
+    if fs["state"] == "ok" and len(new_boards) < 8:
+        return None
+    if fs["state"] is None:
+        ok, why = direct.probe()
+        if not ok:
+            fs["state"] = "unavailable"
+            fs["why"] = why
+            _FEEDS_NOTE = {"available": False,
+                           "note": "Direct job feeds can't be reached from here (normal in Claude chat). Using web search."}
+            return _FEEDS_NOTE
+        fs["state"] = "ok"
+        for kind, slugs in direct.SEED_BOARDS.items():
+            for slug in slugs:
+                if f"{kind}:{slug}" not in st.setdefault("ats_boards", []):
+                    st["ats_boards"].append(f"{kind}:{slug}")
+        new_boards = [b for b in st["ats_boards"] if b not in fs["boards_done"]]
+        first = True
+    else:
+        first = False
+    boards = [tuple(b.split(":", 1)) for b in new_boards[:150]]
+    locs = cfg["locations"]
+    wants_remote = any(is_remote(l) or is_anywhere(l) for l in locs)
+    apis = ["remotive", "remoteok", "himalayas", "jobicy"] if (first and wants_remote) else []
+    li_locs = ([l for l in locs if not is_anywhere(l)] or ["Remote"]) if (first and cfg.get("linkedin_direct")) else []
+    w = cfg.get("window") or {}
+    days = max(1, (dt.date.fromisoformat(w["end"]) - dt.date.fromisoformat(w["start"])).days) if w.get("start") else 30
+    home = next((country_of(l) for l in locs if country_of(l)), "")
+    results, report = direct.run_feeds(cfg["roles"], boards, apis, li_locs, int(days), home)
+    fs["boards_done"] += [f"{k}:{v}" for k, v in boards]
+    gone = set(report["boards_gone"])
+    st["ats_boards"] = [b for b in st["ats_boards"] if b not in gone]
+    stats = ingest_batch(st, results, "direct")
+    st["dry_searches"] = 0                       # feeds are not a web search
+    fs.setdefault("runs", []).append({"boards": report["boards_checked"], "live": report["boards_live"],
+                                      "listings": len(results), "by_source": report["by_source"],
+                                      "errors": len(report["errors"]), "kept": stats.get("new", 0)})
+    _FEEDS_NOTE = {"available": True, "boards_checked": report["boards_checked"], "listings_read": len(results),
+                   "by_source": report["by_source"], "new_candidates": stats.get("new", 0),
+                   "outside_window": stats.get("outside_window", 0), "closed": stats.get("closed_or_stale", 0),
+                   "note": "Read directly from company job boards and job APIs, with exact posting dates. "
+                           "Tell the user the numbers in one line, then keep following the actions."}
+    return _FEEDS_NOTE
+
+
+def cmd_feeds(args):
+    st = load(args)
+    if args.force:
+        st.setdefault("feeds", {"state": None, "boards_done": []})["state"] = None
+        st["feeds"]["boards_done"] = []
+    rep = maybe_run_feeds(st)
+    save(args, st)
+    out(rep or {"skipped": True, "state": (st.get("feeds") or {}).get("state")})
+
+
+def cmd_site_emails(args):
+    """Claude Code (or any machine with open internet): read a saved lead's company website directly and
+    record the published emails, with page + quoted text as evidence. Decodes Cloudflare-hidden addresses."""
+    st = load(args)
+    c = cand(st, args.id)
+    if not c or c["status"] != "saved":
+        fail("Unknown or unsaved lead id.")
+    site = args.url or c.get("website") or ""
+    if not site:
+        fail("No website known for this lead. Find the company's own site (web search) and pass --url.")
+    wd = domain_of(site if "://" in site else "https://" + site)
+    if wd == domain_of(c["url"]) and not looks_like_company_site(c, wd):
+        fail("That is the job board's site, not the company's. Pass the company's own website.")
+    try:
+        res = direct.site_emails(site)
+    except direct.Blocked as e:
+        out({"ok": False, "unavailable": True, "why": str(e),
+             "next": "This machine can't open websites directly. Use web search + web fetch as in references/contacts.md."})
+        return
+    upd = {"id": c["id"], "website": res["website"], "emails": res["emails"]}
+    if not res["emails"]:
+        upd["website_searched"] = True
+    report = apply_contacts(st, [upd])
+    save(args, st)
+    out({"ok": True, "website": res["website"], "pages_read": res["pages"], "found": [e["email"] for e in res["emails"]],
+         **report})
+
+
 # ============================================================================ commands
 
 
@@ -1176,6 +1296,7 @@ def cmd_init(args):
             "target": target, "run_by": args.run_by or "",
             "max_searches": min(36, math.ceil(target * 2.5) + len(roles) * len(locations) + 2),
             "max_misses": max(30, target * 4),
+            "feeds": args.feeds, "linkedin_direct": bool(args.linkedin_direct),
         },
         "saved": 0, "saved_by_source": {}, "searches": 0, "query_index": 0, "consecutive_misses": 0,
         "counts": {}, "candidates": [], "pending_search": None, "status": "running", "notes": [],
@@ -1271,6 +1392,7 @@ def cmd_next(args):
 
     if st["saved"] >= cfg["target"]:
         return done("target_reached", "Target number of leads saved.")
+    maybe_run_feeds(st)
     out_of_searches = st["searches"] >= cfg["max_searches"]
     # n8n-style: stop on the search budget, or after many searches in a row that saved nothing.
     # (Counting searches, not rejected results: one page of old listings must not end the run.)
@@ -1411,6 +1533,7 @@ def ingest_batch(st, results, board: str = "") -> dict:
 
     for r in results:
         url = str(r.get("url") or r.get("link") or "").strip()
+        register_board(st, url)
         title = str(r.get("title") or "").strip()
         snippet = re.sub(r"\s+", " ", str(r.get("snippet") or r.get("description") or "")).strip()
         text = f"{title} {snippet}"
@@ -1437,10 +1560,17 @@ def ingest_batch(st, results, board: str = "") -> dict:
             exclude(st, title, url, "outside_window", est["text"])
             continue
 
+        register_board(st, url)
         p = parse_title(title, url)
+        if r.get("feed"):                                  # direct feed: fields are exact, not parsed from a title
+            p = {"company": r.get("company") or p["company"], "role": title, "location": r.get("location") or p["location"]}
         c = {"id": f"c{len(st['candidates']) + 1}", "source": source_of(nurl), "url": display_url(url), "nurl": nurl, "title": title,
              "snippet": snippet[:700], "company": p["company"], "role": p["role"], "location": p["location"],
              "posted": "", "status": "new", "open_check": None, "contact": None}
+        if r.get("feed"):
+            c["feed"] = r["feed"]
+            if r.get("apply_url"):
+                c["apply_url"] = r["apply_url"]
         set_date(st, c, est, "search snippet")
         c["key"] = dedupe_key(cfg["mode"], c["company"], c["role"])
         if cfg.get("platforms_only") and not on_platform(cfg, c):
@@ -1724,6 +1854,12 @@ def cmd_contacts(args):
         fail(f"Could not read contacts JSON: {e}")
     if isinstance(updates, dict):
         updates = [updates]
+    report = apply_contacts(st, updates)
+    save(args, st)
+    out(report)
+
+
+def apply_contacts(st, updates) -> dict:
     added, refused, incomplete = [], [], []
     for u in updates:
         c = cand(st, str(u.get("id", "")))
@@ -1773,10 +1909,9 @@ def cmd_contacts(args):
                                       "website (careers, contact, about, team pages) and send this lead again with "
                                       "website + any emails (or no_website: true if it has none)",
                                "queries": contact_queries(c)})
-    save(args, st)
-    out({"ok": True, "added": added, "refused": refused, "incomplete": incomplete,
-         "next": "Do the company-website step for every lead in `incomplete`, then run `contacts` again." if incomplete
-                 else "Run `jword.py plan` to see what's left."})
+    return {"ok": True, "added": added, "refused": refused, "incomplete": incomplete,
+            "next": "Do the company-website step for every lead in `incomplete`, then run `contacts` again." if incomplete
+                    else "Run `jword.py plan` to see what's left."}
 
 
 def cmd_track(args):
@@ -2330,8 +2465,19 @@ def main(argv=None):
     p.add_argument("--run-by", default="")
     p.add_argument("--existing", default="", help="earlier Jword .xlsx/.csv: skip its leads and append to it on export")
     p.add_argument("--recheck-previous", action="store_true", help="re-check earlier jobs and mark the ones that closed")
+    p.add_argument("--feeds", choices=["auto", "off"], default="auto",
+                   help="read company job-board feeds and remote-job APIs directly when this machine can reach them")
+    p.add_argument("--linkedin-direct", action="store_true",
+                   help="also read LinkedIn's public job search directly (opt-in: against LinkedIn's terms)")
     p.set_defaults(fn=cmd_init)
 
+    p = sub.add_parser("feeds", help="read company job boards and job APIs directly (runs automatically from `next`)")
+    p.add_argument("--force", action="store_true", help="read every board again")
+    p.set_defaults(fn=cmd_feeds)
+    p = sub.add_parser("site-emails", help="read a lead's company website directly for published emails")
+    p.add_argument("--id", required=True)
+    p.add_argument("--url", default="", help="the company's own website (if not already recorded)")
+    p.set_defaults(fn=cmd_site_emails)
     p = sub.add_parser("next", help="what to do next")
     p.add_argument("--batch", default=REVIEW_BATCH, help="candidates per review step (Claude Code: up to 12)")
     p.add_argument("--max-tasks", default=5, help="page checks per verify step (Claude Code: up to 15)")

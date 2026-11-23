@@ -1,196 +1,194 @@
-# Jword: your job hunt and outreach assistant, inside Claude
+# Jword: find jobs and email recruiters, with Claude
 
-**A job post means a company needs someone right now.** Jword turns that signal into action. Ask Claude in plain English and it will:
+![tests](https://github.com/DELT99/hiring-signals-leadgen/actions/workflows/ci.yml/badge.svg) ![no API keys](https://img.shields.io/badge/API%20keys-none-brightgreen) ![license](https://img.shields.io/badge/license-MIT-blue)
 
-- find **real, open jobs** posted within the window you choose (24 hours to 60 days, or your own dates),
-- check that every job is still open and that its posting date really is inside your window,
-- find the company's **published** recruiter, HR, founder and generic hiring emails (careers@, jobs@, hr@…), with the page each one came from,
-- write a tailored application and **one individual email per contact**, using only facts from your CV,
-- create **Gmail drafts** for you to review, or send only with your approval,
-- give you an **Excel tracker** and a status table in chat.
+Tell Claude what job you want. Jword then:
 
-> *"Use Jword: find 15 Flutter developer jobs in Germany, the UK or remote, posted in the last 7 days. My CV is attached. Find recruiters and HR emails, write personalized emails, and make Gmail drafts."*
+1. **finds real, open jobs** posted in the time you choose (for example *the last 7 days*),
+2. **finds the company's hiring emails** (careers@, hr@, recruiters), only ones the company publishes itself,
+3. **writes a personal email and cover letter for each job**, using only what's in your CV,
+4. **puts them in your Gmail as drafts**, so you check them and press Send yourself,
+5. **gives you an Excel file** listing every job, email and next step.
 
-No API keys, no n8n and no coding are needed. It runs on Claude's web search, reasoning, Gmail connector and (optionally) a browser.
+No coding. No API keys. Nothing to install for Setup 1.
 
-**Two ways to use it:**
-**[A. Claude chat](#part-a--claude-chat-recommended)** (recommended: upload one zip and you're done) · **[B. Claude Code](#part-b--claude-code-advanced)** (advanced: parallel subagents) · [C. Compare](#part-c--feature-comparison) · [D. Update](#part-d--updating-jword) · [E. Troubleshooting](#part-e--troubleshooting) · [F. n8n workflow](#part-f--optional-n8n-workflow)
+> **Example:** *"Use Jword. Find Flutter Developer jobs in Lahore or remote, posted in the last 7 days. My CV is attached. Find HR emails and make Gmail drafts."*
 
 ---
 
-## How it works
-**First, Jword always asks you** (as tap-to-answer options): how recently the jobs should have been posted (24 hours to 60 days, or your own dates), where to search (anywhere, company career pages / ATS, LinkedIn, Indeed, Wellfound, remote job boards, Built In), and what to do with the jobs (just find them / + find recruiter and HR emails / + write an application and email for each job as Gmail drafts). It also asks for your roles, locations and CV if you haven't given them. After that it works through every stage without stopping, except to ask how to handle the emails.
+## Which setup should I use?
 
-| Stage | What Jword does | You decide |
+| | **Setup 1: Claude chat** | **Setup 2: Claude Code (desktop app)** ⭐ more jobs |
 |---|---|---|
-| 1. **Find** | Searches like the n8n agent, with no API keys: each search targets one board with a `site:` filter. The boards come from your options: the open web, **LinkedIn hiring posts**, your location's own boards (e.g. Rozee.pk, Hired.pk and Taraki for Pakistan, Bayt, Naukri, Reed), Greenhouse, Workable, Lever and remote boards. Every role × location gets a turn, the board furthest behind its share goes next, and dry boards are skipped. **LinkedIn gets priority** (about one search in three, and up to ~40% of the jobs) but the results are never LinkedIn-only. Drops listing pages, closed or paywalled jobs, duplicates and wrong locations, and **anything outside your posting window or without a verifiable posting date**. Scores each job 1–5 against your CV (with the gaps, honestly) and opens it to confirm it's still accepting applications. | roles, locations, **how recent**, platforms, how many |
-| 2. **Contacts** | Finds named recruiters, HR, talent and hiring managers and founders, plus generic hiring inboxes, **only from public pages**, each with its source and a verification status. If the job post has no HR or recruiter email, it **searches the company by name and checks its own website** (careers, contact, about, team pages) before giving up. Never guesses an address. | jobs only / + contacts / + contacts and outreach |
-| 3. **Prepare** | Builds your applicant profile from your CV, asks once for anything missing, and writes a cover letter and answers per job. | – |
-| 4. **Outreach** | Writes one email per verified contact (own subject, own body), creates Gmail drafts or sends with approval, and records every Gmail id. | contacts only / in chat / **Gmail drafts** / approve each / capped auto |
-| 5. **Apply** *(optional)* | Fills application forms in a browser, and hands back to you for logins, CAPTCHAs and uploads. | ask before each submit / auto when covered / fill only |
-| 6. **Report** | An Excel tracker (Leads, Contacts, Applications, Run Log, Excluded) plus a status table. | – |
+| Time to set up | 5 minutes | 10 minutes |
+| You need | A Claude account | A paid Claude plan (Pro, Max, Team or Enterprise) and the Claude desktop app on Windows or Mac |
+| Typing commands | None | None (all clicks) |
+| How it finds jobs | Claude's web search | Web search **plus** reading company job boards and remote-job sites directly, so many more jobs with exact dates |
+| LinkedIn | LinkedIn hiring posts found by search | Also LinkedIn's job listings, if you say yes |
+| Gmail drafts | ✓ | Emails go in the Excel file (Gmail drafts: see [Setup 2, step 6](#step-6-emails-and-gmail)) |
 
-**Clients mode** does the same for agencies and freelancers: companies hiring developers become **sales leads**, with decision-maker contacts and B2B emails. B2B emails are **never** sent automatically.
-
-**What a real run looks like** (live test, 17 Nov 2026: AI Engineer + Flutter Developer, Lahore + Remote, last 7 days, 5 jobs): 3 searches → 37 results → 5 verified open jobs posted in the window, a tailored letter for each, 1 published hiring inbox found (the other companies publish none) → 1 Gmail draft. Opening each page mattered: 6 jobs that looked open in search were expired or closed, including one shown as "5 days ago" that was posted 9 months earlier.
-
-**n8n-style search check** (same day, 7-day window, AI Engineer + Flutter Developer, Lahore + Remote): 6 board searches, 3 jobs saved and page-checked. One came from Hired.pk ("6 hours ago"), one from Remotive and one from Taraki. 14 expired listings and 9 out-of-window listings were dropped, and 7 good matches had no date anywhere. Two changes came out of this test:
-- Dated boards are now searched with this month's date words. On Rozee, the plain query had returned 2023–2025 pages; the dated query put this month's listings first.
-- Titles like "AI/ML Engineer" now count as *AI Engineer*.
-
-**The guarantees:** the window is never widened to hit a number · no invented jobs, dates, contacts or experience · emails only to verified, published addresses · never the same email twice, even across runs · nothing is sent or submitted outside the mode you chose · Claude never claims an email was sent without Gmail's confirmation.
+**Not sure? Start with Setup 1.** It takes 5 minutes, and you can add Setup 2 any time.
 
 ---
 
-## Part A — Claude chat (recommended)
+## Setup 1: Claude chat (5 minutes)
 
-**You don't need** VS Code, Git, a terminal, Claude Code, API keys or n8n.
+### Step 1: Download the Jword file
+1. Click **[dist/jword.zip](dist/jword.zip)**.
+2. On the page that opens, click the **Download** button (⬇, top right of the file box).
+3. You now have `jword.zip` in your Downloads folder. **Don't unzip it.**
 
-*What's a skill?* A small package of instructions and scripts that teaches Claude a task. You upload it once, and Claude uses it whenever your request matches. ([Claude Help Center: Use skills in Claude](https://support.claude.com/en/articles/12512180))
+### Step 2: Add it to Claude
+1. Open **[claude.ai](https://claude.ai)** and sign in, or open the Claude desktop app.
+2. Click **Customize** in the left sidebar, then **Skills**.
+3. Click **+**, then **Create skill**, then **Upload a skill**.
+4. Pick the `jword.zip` file.
+5. Check that **Jword** appears in the list and its switch is **on**.
 
-1. **Download** [`dist/jword.zip`](dist/jword.zip): open it on GitHub → **Download raw file**. **Don't unzip it.**
-2. Open **[claude.ai](https://claude.ai)** (or the Claude desktop app).
-3. Go to **Customize → Skills**.
-4. Click **+ → Create skill → Upload a skill**.
-5. Choose `jword.zip`, the zip itself, not an extracted folder.
-6. Make sure **Jword** is toggled **on**.
-7. Make sure **Code execution and file creation** is on (Settings → Capabilities). It's on by default on most plans; on Team or Enterprise plans an admin may need to enable it.
-8. Make sure **Web search** is on in your chat (the tools menu in the message box).
-9. *For emails:* **Settings → Connectors → Gmail → Connect**.
-10. *For filling forms (optional):* install **Claude in Chrome**, or use the **Claude desktop app**'s built-in browser.
-11. Start a **new chat**, attach your CV, and ask, for example:
+### Step 3: Turn on three settings
+1. **Code execution:** click your name (bottom left) → **Settings** → **Capabilities** → turn on **Code execution and file creation**. *(It's usually on already. On a work or school account, an admin may need to allow it.)*
+2. **Web search:** in a chat, open the **tools** menu in the message box and turn on **Web search**.
+3. **Gmail** (only if you want email drafts): **Settings** → **Connectors** → **Gmail** → **Connect**, then sign in with Google and allow access.
+
+### Step 4: Your first run
+1. Click **New chat**.
+2. Attach your CV with the **📎** button (PDF or Word).
+3. Type:
+   ```text
+   Use Jword. Find AI Engineer jobs, remote, posted in the last 7 days.
+   My CV is attached. Find HR emails and make Gmail drafts.
+   ```
+4. **Jword asks a few quick questions first.** Tap your answers:
+   - *How recently should the jobs have been posted?*
+   - *Where should I search?*
+   - *What should I do with the jobs?*
+5. Wait a few minutes. You get:
+   - a numbered list of jobs (company, role, date posted, how well you fit),
+   - the emails it found, and where it found each one,
+   - drafts in **Gmail → Drafts** (if you chose that),
+   - an **Excel file** to download.
+
+✅ **Done.** Want more jobs per run? Add Setup 2.
+
+---
+
+## Setup 2: Claude Code in the desktop app (10 minutes, more jobs)
+
+Claude Code is Claude working in a folder on your own computer. There, Jword can read company job boards (Greenhouse, Lever, Ashby, Workable), remote-job sites (Remotive, RemoteOK, Himalayas, Jobicy) and company websites **directly**, which Claude chat's sandbox can't do. It also splits big searches across helper agents that work in parallel. You use it by clicking, just like chat.
+
+### Step 1: Install what's needed
+1. **The Claude desktop app:** [claude.ai/download](https://claude.ai/download). Install it and sign in.
+2. **Windows only:**
+   - **Git for Windows** ([git-scm.com/downloads/win](https://git-scm.com/downloads/win)): click through the installer with the default options. The Code tab needs it.
+   - **Python** ([python.org/downloads](https://www.python.org/downloads/)): run the installer and **tick "Add python.exe to PATH"** on the first screen.
+3. **Mac:** nothing else is needed. If Claude later says Python is missing, install it from [python.org/downloads](https://www.python.org/downloads/).
+4. **Restart the Claude app** after installing anything.
+
+### Step 2: Download the Jword folder
+1. On this GitHub page, click the green **Code** button (top of the page), then **Download ZIP**.
+2. **Unzip it** (right-click → *Extract All* on Windows; double-click on Mac).
+3. Move the `hiring-signals-leadgen` folder somewhere easy to find, such as **Documents**.
+
+### Step 3: Open the folder in Claude Code
+1. Open the Claude desktop app and click the **Code** tab at the top.
+2. Under the message box, choose **Local**.
+3. Click **Select folder** and pick the `hiring-signals-leadgen` folder.
+
+### Step 4: Your first run
+1. Type `/jword`, or say:
+   ```text
+   Use Jword. Find Flutter Developer jobs in Lahore or remote, posted in the last 7 days.
+   My CV is at C:\Users\YourName\Documents\CV.pdf. Find HR emails and write emails for each job.
+   ```
+   *(Tip: put your CV in the Jword folder and just say "my CV is CV.pdf in this folder".)*
+2. Answer the same quick questions as in chat. In Claude Code, Jword also asks whether to read **LinkedIn's job listings directly**. That finds many more LinkedIn jobs with exact dates, but LinkedIn's terms don't allow automated reading, so only say yes for a small personal search.
+3. When Claude asks to **run a command** (it runs Jword's script on your computer), click **Allow**. Choose "always allow" for this folder to stop the repeated questions.
+4. You'll see a line like *"Read 1,240 listings from 48 company boards and 4 job sites directly; 31 fit your window"* (your numbers will differ), then the usual results.
+
+### Step 5: Find your Excel file
+The Excel file is saved in the `hiring-signals-leadgen` folder, named like `jword_2026-11-22.xlsx`. Open it in Excel or Google Sheets.
+
+### Step 6: Emails and Gmail
+The Gmail connection you made in Claude chat may not be available in the Code tab. If it isn't, Jword still writes every email and puts them in the Excel file (**Applications** sheet), ready to copy into Gmail. Or do the email step in Claude chat (Setup 1), where Gmail drafts work.
+
+✅ **Done.**
+
+---
+
+## Things you can ask
 
 ```text
-Use Jword. Find 10 AI Engineer or LLM Engineer jobs, remote, posted in the last 7 days.
-My CV is attached. Find recruiter/HR emails and create Gmail drafts for my review.
+Use Jword. Find 10 Flutter Developer jobs in Lahore or remote, posted in the last 3 days.
+My CV is attached. Find HR and recruiter emails and make Gmail drafts.
 ```
 ```text
-Use Jword to find 20 Flutter developer jobs in Germany, UK and remote worldwide, posted within
-the last 14 days. Just the list and the Excel, no emails.
+Use Jword to find 20 AI Engineer jobs in Germany, the UK or remote, posted in the last 14 days.
+Just the list and the Excel file, no emails.
 ```
 ```text
-Use Jword in clients mode: find companies hiring React developers in Dubai posted this week.
-We're a dev agency. Find decision-makers and draft B2B emails in Gmail (no sending).
+Run Jword again with the same search, last 3 days. Here's last week's Excel file (attached).
 ```
 ```text
-Run Jword again: same search, last 3 days. Here's last week's tracker (attached).
+Use Jword in clients mode: find companies hiring React developers in Dubai this week.
+We're a software agency. Find decision-makers and draft emails in Gmail (don't send).
 ```
 
-Claude asks a few quick multiple-choice questions (including **"How recently should the jobs have been posted?"** and how to handle emails), then works on its own and sends you the Excel file.
-
-In Claude chat, Jword runs as **one assistant**, doing the stages in order and in small batches. You get the same features and checks as in Claude Code. Gmail and form filling work only when those integrations are connected in your chat. Without them, Jword writes the emails in chat and tells you what's missing.
-
----
-
-## Part B — Claude Code (advanced)
-
-Use this for big runs (many roles and locations). Claude Code runs **specialized subagents in parallel**, each in its own context.
-
-**Prerequisites:** [Claude Code](https://code.claude.com/docs/en/overview) (signed in), [Git](https://git-scm.com/downloads), and Python 3.10+ with `pip install openpyxl`. VS Code is optional.
-
-```bash
-git clone https://github.com/DELT99/hiring-signals-leadgen.git
-cd hiring-signals-leadgen
-code .        # optional: open in VS Code
-claude
-```
-*(Windows: run the same commands in PowerShell or Git Bash. Use `py -m pip install openpyxl` if `pip` isn't found.)*
-
-Claude Code discovers these automatically from the project folder:
-| Path | What it is |
-|---|---|
-| `.claude/skills/jword/SKILL.md` | the Jword skill ([skills docs](https://code.claude.com/docs/en/skills)) |
-| `.claude/agents/job-researcher.md` | runs search packets and page checks (Sonnet) |
-| `.claude/agents/contact-researcher.md` | finds published contacts (Haiku) |
-| `.claude/agents/application-writer.md` | cover letters and answers (Sonnet) |
-| `.claude/agents/outreach-writer.md` | one email per contact (Sonnet) |
-| `CLAUDE.md` | project notes for Claude |
-
-- **See the agents:** type `/agents` ([subagents docs](https://code.claude.com/docs/en/sub-agents)).
-- **Run Jword:** type `/jword`, or just ask: *"Use jword to find 20 Flutter jobs in Germany, UK and remote, posted in the last 7 days."*
-- **How it runs:** the main session is the **orchestrator**. It asks you the questions, splits the searches into packets (one per location or role), runs up to 3–4 subagents at once, merges and de-duplicates the results, verifies them, then hands contact research and writing to the other agents. **Only the orchestrator** talks to you, sends Gmail drafts or emails, or submits forms. Subagents have no Gmail, browser or shell access. The same posting window goes to every agent, and the engine enforces it.
-- **Models:** set in each agent file (`model: sonnet` / `haiku`). Change one to `inherit` to use your session's model, or set `CLAUDE_CODE_SUBAGENT_MODEL`.
-- **Gmail in Claude Code:** the Gmail connector you added in Claude chat isn't automatically available in Claude Code. Add a Gmail MCP server/connector to Claude Code yourself, or let Jword write the emails into the tracker and create the drafts from Claude chat.
-- **Cost:** subagents add speed and separate contexts, not guaranteed token savings (each one loads its own instructions). For small runs (one location, ≤10 jobs), Jword stays sequential.
+**Tips for better results**
+- **Attach your CV every time.** Jword uses it to rank the jobs and write the emails.
+- Ask for **2 or 3 job titles** that mean the same thing (*"AI Engineer, LLM Engineer, ML Engineer"*).
+- A short window (24 hours, 3 days) gives fewer but fresher jobs. Jword never quietly widens it.
+- Say your level (*"I'm a junior developer"*) so senior-only roles get a lower fit score.
+- Attach last run's Excel file when you run it again: jobs you've already seen are skipped, and nobody is emailed twice.
 
 ---
 
-## Part C — Feature comparison
-| | **Claude chat** | **Claude Code** |
-|---|---|---|
-| Installation | Upload one zip | Clone the repo, run `claude` |
-| Skill support | ✓ | ✓ (`/jword`) |
-| Custom subagents | – (one assistant) | ✓ 4 specialized agents |
-| Parallel research | – (batched, in order) | ✓ |
-| Strict posting-date filter | ✓ | ✓ (same engine) |
-| Job verification (open, dated) | ✓ | ✓ |
-| Contact research (named + generic) | ✓ | ✓ |
-| Application preparation | ✓ | ✓ |
-| Gmail drafts / sending | ✓ with the Gmail connector | needs a Gmail connector set up in Claude Code |
-| Form filling | ✓ with Claude in Chrome / desktop browser | ✓ with a browser tool |
-| Excel tracker | ✓ | ✓ |
-| Clients (B2B) mode | ✓ | ✓ |
+## Is it safe?
+
+- **It never sends an email unless you choose a sending option.** By default it only creates **drafts**, which you review and send yourself.
+- **It never guesses email addresses.** Every address comes from the job post or the company's own website, and the Excel file shows exactly where.
+- **It never emails the same address twice**, even across runs (attach your last Excel file).
+- **It never makes up** jobs, dates, skills or experience. Your emails use only facts from your CV.
+- **It never logs in** to LinkedIn or any other site as you, never solves CAPTCHAs, and never applies on LinkedIn, Indeed or Glassdoor for you.
 
 ---
 
-## Part D — Updating Jword
-**Claude chat:** download the latest `dist/jword.zip` → **Customize → Skills** → on the old Jword, **⋯ → Delete** → **Upload a skill** with the new zip → toggle it on → start a new chat.
+## Help: something's not working
 
-**Claude Code:** `git pull`, then restart `claude` (new agent files can need a restart). Check `/agents` shows the four Jword agents and that `/jword` appears.
-
----
-
-## Part E — Troubleshooting
 | Problem | Fix |
 |---|---|
-| Skill doesn't appear | Upload the **zip**, not a folder; its top folder must be `jword/` with `SKILL.md` inside. |
-| Skill doesn't trigger | Check it's toggled on, start a **new** chat, and say *"Use Jword …"*. |
-| It didn't ask the questions / found nothing | You're probably on an old upload. Delete Jword in Customize → Skills and upload the latest `dist/jword.zip` (Jword v3.1+ always asks first and uses date-aware searches). |
-| "Jword needs web search" | Turn on Web search in the chat's tools menu. |
-| No Gmail drafts | Connect Gmail (Settings → Connectors). Until then Jword writes the emails in chat and in the tracker. |
-| No Excel file | Turn on *Code execution and file creation*. |
-| Claude Code doesn't list the agents | Run `claude` from the repo root; restart after the first pull; check `.claude/agents/*.md` exists. |
-| `/jword` not found in Claude Code | Check `.claude/skills/jword/SKILL.md` exists. If you also uploaded Jword in Claude chat, the account copy syncs into Claude Code too, so keep only one (disable the uploaded one, or delete the project copy). |
-| Wrong folder structure | Don't move files. The source is `skill/jword/`; `tools/build_skill.py` creates `.claude/skills/jword/` and `dist/jword.zip`. |
-| Zip seems out of date | Run `python3 tools/build_skill.py --check`; rebuild with `python3 tools/build_skill.py`. |
-| Fewer jobs than asked | Expected when the window is short: Jword never widens it. The Excluded sheet shows why each job was dropped. Try a longer window (14 or 30 days), more locations, or "Remote job boards". You can also allow undated jobs in a separate list: Greenhouse, Lever and `jobs.workable.com` pages show no posting date, and neither do most LinkedIn hiring posts. |
-| No LinkedIn job pages | LinkedIn's job pages (`/jobs/view/…`) aren't in Claude's web search. Jword searches **LinkedIn hiring posts** instead ("We're hiring… send your CV to …"). These often include an email but rarely a date, so allow undated jobs in a separate list to keep them. |
-| No emails found | Normal for many companies: they publish only an application form. Jword never guesses addresses; your letters are still in the Applications sheet. |
+| Jword doesn't appear under Skills | Upload the **zip file itself**, not an unzipped folder. |
+| Claude doesn't use Jword | Check that its switch is on, start a **new chat**, and begin with *"Use Jword"*. |
+| It didn't ask me any questions | You may have an old version. Delete Jword (Customize → Skills → ⋯ → Delete) and upload the latest `jword.zip`. |
+| "Jword needs web search" | Turn on **Web search** in the chat's tools menu. |
+| No Gmail drafts | Connect Gmail: Settings → Connectors → Gmail. Until then, the emails are in the chat and the Excel file. |
+| No Excel file | Turn on **Code execution and file creation** (Settings → Capabilities). |
+| Code tab asks me to upgrade | Claude Code needs a paid plan. Use Setup 1 instead. |
+| Code tab won't start on Windows | Install **Git for Windows**, then restart the Claude app. |
+| "Python was not found" (Setup 2) | Install Python from python.org with **"Add python.exe to PATH"** ticked, then restart the Claude app. |
+| `/jword` doesn't appear (Setup 2) | Make sure you selected the `hiring-signals-leadgen` folder itself (the one containing `CLAUDE.md`), not a folder inside it or above it. |
+| Fewer jobs than I asked for | Normal with a short window. Try 14 or 30 days, or add more job titles or locations. Setup 2 finds more. |
+| No emails found for a company | Many companies only accept applications through their website form. Jword never guesses, so apply with the job link; your cover letter is still in the Excel file. |
+
+Still stuck? [Open an issue](https://github.com/DELT99/hiring-signals-leadgen/issues) with what you typed and what happened.
 
 ---
 
-## Part F — Optional n8n workflow
-Prefer hands-off, scheduled lead finding with your own API keys? The original **n8n workflow** is still here. It uses Firecrawl for search and (optionally) Gemini for scoring, and writes to Google Sheets. It finds and scores leads, but doesn't do contacts, emails or applying.
-- Import [`workflow/hiring-signal-lead-engine.json`](workflow/hiring-signal-lead-engine.json) into n8n.
-- Full setup guide: **[docs/n8n.md](docs/n8n.md)**
+## Updating to a new version
+- **Setup 1:** download the new [`jword.zip`](dist/jword.zip) → Customize → Skills → on Jword, **⋯ → Delete** → **Upload a skill** with the new file → start a new chat.
+- **Setup 2:** download the ZIP from GitHub again and replace your `hiring-signals-leadgen` folder. Move your CV and Excel files out of the old folder first.
 
 ---
 
-## Repo layout
-```
-skill/jword/            SOURCE of the skill: SKILL.md, references/, scripts/jword.py, tests/
-.claude/skills/jword/   generated copy for Claude Code (don't edit)
-.claude/agents/         the four Claude Code subagents
-dist/jword.zip          generated upload for Claude chat (don't edit)
-tools/build_skill.py    builds both copies from the source
-CLAUDE.md               notes for Claude Code
-examples/               sample output
-workflow/ src/ sheets/ scripts/ docs/n8n.md   the n8n edition
-tests/                  distribution checks + n8n simulator
-```
-
-## Development
-```bash
-python3 tools/build_skill.py                   # after editing skill/jword/
-python3 skill/jword/tests/test_jword.py        # engine: search loop, filters, Excel
-python3 skill/jword/tests/test_jword_v3.py     # date window, contacts, outreach, Gmail, reruns, packets
-python3 tests/test_distribution.py             # zip + Claude Code copy + agents + n8n regression
-node tests/simulate.js                         # n8n workflow simulator
-```
-More detail on stages, sheets and statuses: **[skill/README.md](skill/README.md)**.
+## For developers and power users
+- **[Advanced guide](docs/advanced.md):**
+  - how each stage works;
+  - the direct feeds and how searches are planned;
+  - Claude Code subagents (`git clone`, then `claude` in the folder);
+  - repo layout and tests.
+- **[n8n workflow](docs/n8n.md):** the original scheduled lead finder (uses your own API keys).
 
 ## Responsible use
-You're responsible for what's sent in your name. Review drafts, and follow local rules for commercial email (CAN-SPAM, GDPR/PECR). Jword never automates LinkedIn, Indeed, Glassdoor or ZipRecruiter applications (their terms forbid it), never solves CAPTCHAs, and never logs in for you.
+Jword reads only public pages. It keeps the original link and source on every job (Remotive, RemoteOK, Himalayas and Jobicy ask for this), and reads only a few pages at a time from each site. LinkedIn's direct job listings are off unless you say yes, because LinkedIn's terms forbid automated access; keep those runs small and personal. You're responsible for emails sent in your name, so review the drafts. If you email companies to offer services (clients mode), follow your country's rules for commercial email, such as CAN-SPAM or GDPR.
 
 ## License
 MIT. See [LICENSE](LICENSE).

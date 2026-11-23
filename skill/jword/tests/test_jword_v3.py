@@ -3,6 +3,8 @@
 repeated runs and parallel work packets.   Run:  python3 tests/test_jword_v3.py"""
 import datetime as dt
 import json
+import os
+os.environ.setdefault("JWORD_FEEDS", "off")   # these tests cover the web-search path; see test_direct.py
 import sys
 import tempfile
 from pathlib import Path

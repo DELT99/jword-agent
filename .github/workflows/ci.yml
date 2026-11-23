@@ -1,0 +1,24 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: pip install openpyxl
+      - run: python3 skill/jword/tests/test_jword.py
+      - run: python3 skill/jword/tests/test_jword_v3.py
+      - run: python3 skill/jword/tests/test_direct.py
+      - run: python3 tests/test_distribution.py
+      - run: node tests/simulate.js
