@@ -22,3 +22,13 @@ jobs:
       - run: python3 skill/jword/tests/test_direct.py
       - run: python3 tests/test_distribution.py
       - run: node tests/simulate.js
+  live-check:
+    # Reads the real job sites once, so you can see the direct feeds working. Never fails the build.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 tools/live_check.py --linkedin

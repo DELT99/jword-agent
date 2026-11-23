@@ -2,6 +2,7 @@
 """Packaging and architecture checks for both Jword distributions.
 Run:  python3 tests/test_distribution.py"""
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -60,8 +61,9 @@ def zip_engine_runs_standalone():
         zipfile.ZipFile(ROOT / "dist" / "jword.zip").extractall(tmp)
         eng = Path(tmp) / "jword" / "scripts" / "jword.py"
         st = Path(tmp) / "run" / "state.json"
+        env = {**os.environ, "JWORD_FEEDS": "off"}   # offline check; live feeds are tested in test_direct / live-check
         run = lambda *a: json.loads(subprocess.run([sys.executable, "-I", str(eng), "--state", str(st), *a],
-                                                   capture_output=True, text=True, check=True).stdout)
+                                                   capture_output=True, text=True, check=True, env=env).stdout)
         assert run("init", "--mode", "jobs", "--roles", "Flutter Developer", "--locations", "Remote",
                    "--posted-within", "last 10 days")["config"]["posted"].startswith("Last 10 days")
         assert run("next")["action"] == "search"
